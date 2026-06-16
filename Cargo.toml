@@ -1,9 +1,12 @@
 [package]
 name = "fcwt2"
-version = "1.0.0"
+version = "1.1.0"
 edition = "2024"
 description = "Rust implementation of the fast Continuous Wavelet Transform"
 license = "Apache-2.0"
+documentation = "https://docs.rs/fcwt2"
+homepage = "https://github.com/RustedBytes/fcwt2"
+repository = "https://github.com/RustedBytes/fcwt2"
 
 [lib]
 name = "fcwt2"
