@@ -9,3 +9,6 @@ lint:
 
 bench:
     cargo bench --bench cwt
+
+python-build:
+    cargo build --features python

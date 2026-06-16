@@ -2,6 +2,8 @@
 
 mod fcwt;
 mod morlet;
+#[cfg(feature = "python")]
+mod python;
 mod scales;
 mod wavelet;
 

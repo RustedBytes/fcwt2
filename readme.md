@@ -50,6 +50,35 @@ samples:
 cargo bench --bench cwt
 ```
 
+## Python bindings
+
+PyO3 bindings are available behind the optional `python` feature:
+
+```sh
+cargo build --features python
+```
+
+The module exposes `Morlet`, `Scales`, and `Fcwt`. Real transforms accept a
+list of floats; complex transforms accept `(real, imag)` tuples and return
+Python `complex` values in the same scale-major layout as the Rust API.
+
+To build/install the Python extension with maturin:
+
+```sh
+pip install maturin
+maturin develop
+```
+
+Example:
+
+```python
+import fcwt
+
+scales = fcwt.Scales.linear_frequencies(1000, 1.0, 120.0, 64)
+transform = fcwt.Fcwt.morlet(2.0)
+coefficients = transform.cwt_real([0.0] * 1024, scales)
+```
+
 ## Acknowledgements
 
 - Original library fCWT: https://github.com/fastlib/fCWT
