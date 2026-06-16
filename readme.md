@@ -1,5 +1,7 @@
 # fCWT in Rust
 
+[![Crates.io Version](https://img.shields.io/crates/v/fcwt2)](https://crates.io/crates/fcwt2)
+
 Rust implementation of the fast Continuous Wavelet Transform originally written in C++.
 
 This crate replaces the original C++/KFR implementation with an idiomatic Rust
@@ -28,7 +30,7 @@ cargo +nightly-2026-04-03 test
 ## Usage
 
 ```rust
-use fcwt::{Fcwt, Morlet, ScaleType, Scales};
+use fcwt2::{Fcwt, Morlet, ScaleType, Scales};
 
 let signal = vec![0.0_f32; 1024];
 let scales = Scales::new(ScaleType::LinearFrequencies, 1_000, 1.0, 100.0, 64)?;
@@ -36,7 +38,7 @@ let mut fcwt = Fcwt::new(Morlet::new(2.0));
 
 let coefficients = fcwt.cwt_real(&signal, &scales);
 assert_eq!(coefficients.len(), signal.len() * scales.len());
-# Ok::<(), fcwt::ScaleError>(())
+# Ok::<(), fcwt2::ScaleError>(())
 ```
 
 Output is scale-major: `coefficients[scale_index * signal.len() + sample_index]`.
@@ -72,10 +74,10 @@ maturin develop
 Example:
 
 ```python
-import fcwt
+import fcwt2
 
-scales = fcwt.Scales.linear_frequencies(1000, 1.0, 120.0, 64)
-transform = fcwt.Fcwt.morlet(2.0)
+scales = fcwt2.Scales.linear_frequencies(1000, 1.0, 120.0, 64)
+transform = fcwt2.Fcwt.morlet(2.0)
 coefficients = transform.cwt_real([0.0] * 1024, scales)
 ```
 

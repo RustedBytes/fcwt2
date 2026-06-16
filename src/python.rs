@@ -174,7 +174,7 @@ fn validate_bandwidth(bandwidth: f32) -> PyResult<()> {
 }
 
 #[pymodule]
-fn fcwt(m: &Bound<'_, PyModule>) -> PyResult<()> {
+fn fcwt2(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyMorlet>()?;
     m.add_class::<PyScales>()?;
     m.add_class::<PyFcwt>()?;

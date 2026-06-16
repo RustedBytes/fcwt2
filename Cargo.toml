@@ -1,12 +1,12 @@
 [package]
-name = "fcwt"
+name = "fcwt2"
 version = "1.0.0"
 edition = "2024"
 description = "Rust implementation of the fast Continuous Wavelet Transform"
 license = "Apache-2.0"
 
 [lib]
-name = "fcwt"
+name = "fcwt2"
 crate-type = ["rlib", "cdylib"]
 
 [features]

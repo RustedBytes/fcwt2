@@ -1,5 +1,5 @@
 use criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_main};
-use fcwt::{Complex32, Fcwt, Morlet, ScaleType, Scales};
+use fcwt2::{Complex32, Fcwt, Morlet, ScaleType, Scales};
 use std::hint::black_box;
 
 fn sine_signal(len: usize, sample_rate: usize, frequency: f32) -> Vec<f32> {
