@@ -16,10 +16,11 @@ struct PyMorlet {
 #[pymethods]
 impl PyMorlet {
     #[new]
-    fn new(bandwidth: f32) -> Self {
-        Self {
+    fn new(bandwidth: f32) -> PyResult<Self> {
+        validate_bandwidth(bandwidth)?;
+        Ok(Self {
             inner: Morlet::new(bandwidth),
-        }
+        })
     }
 
     #[getter]
@@ -100,10 +101,11 @@ impl PyFcwt {
     }
 
     #[staticmethod]
-    fn morlet(bandwidth: f32) -> Self {
-        Self {
+    fn morlet(bandwidth: f32) -> PyResult<Self> {
+        validate_bandwidth(bandwidth)?;
+        Ok(Self {
             inner: Fcwt::new(Morlet::new(bandwidth)),
-        }
+        })
     }
 
     fn with_normalization(&mut self, normalize: bool) {
@@ -152,6 +154,22 @@ fn scale_error(error: ScaleError) -> PyErr {
             sample_rate as f32 / 2.0
         )),
         ScaleError::EmptyScaleSet => PyValueError::new_err("scale set cannot be empty"),
+        ScaleError::InvalidFrequencyRange { f0, f1 } => PyValueError::new_err(format!(
+            "expected finite positive frequencies with f0 <= f1, got f0={f0}, f1={f1}"
+        )),
+        ScaleError::InvalidSampleRate => {
+            PyValueError::new_err("sample_rate must be greater than zero")
+        }
+    }
+}
+
+fn validate_bandwidth(bandwidth: f32) -> PyResult<()> {
+    if bandwidth.is_finite() && bandwidth > 0.0 {
+        Ok(())
+    } else {
+        Err(PyValueError::new_err(
+            "Morlet bandwidth must be finite and greater than zero",
+        ))
     }
 }
 

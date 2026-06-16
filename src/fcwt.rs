@@ -11,19 +11,14 @@ const LANES: usize = 8;
 #[derive(Clone, Debug)]
 pub struct Fcwt<W> {
     wavelet: W,
-    normalize: bool,
 }
 
 impl<W> Fcwt<W> {
     pub fn new(wavelet: W) -> Self {
-        Self {
-            wavelet,
-            normalize: false,
-        }
+        Self { wavelet }
     }
 
-    pub fn with_normalization(mut self, normalize: bool) -> Self {
-        self.normalize = normalize;
+    pub fn with_normalization(self, _normalize: bool) -> Self {
         self
     }
 
@@ -43,10 +38,19 @@ impl<W: Wavelet> Fcwt<W> {
             .copied()
             .map(|value| Complex32::new(value, 0.0))
             .collect::<Vec<_>>();
-        self.cwt_complex(&complex_input, scales)
+        self.cwt_inner(&complex_input, scales, true)
     }
 
     pub fn cwt_complex(&mut self, input: &[Complex32], scales: &Scales) -> Vec<Complex32> {
+        self.cwt_inner(input, scales, false)
+    }
+
+    fn cwt_inner(
+        &mut self,
+        input: &[Complex32],
+        scales: &Scales,
+        mirror_real_spectrum: bool,
+    ) -> Vec<Complex32> {
         if input.is_empty() {
             return Vec::new();
         }
@@ -61,8 +65,10 @@ impl<W: Wavelet> Fcwt<W> {
         input_hat[..size].copy_from_slice(input);
         forward.process(&mut input_hat);
 
-        for i in 1..(fft_size >> 1) {
-            input_hat[fft_size - i] = input_hat[i].conj();
+        if mirror_real_spectrum {
+            for i in 1..(fft_size >> 1) {
+                input_hat[fft_size - i] = input_hat[i].conj();
+            }
         }
 
         self.wavelet.generate_frequency(fft_size);
@@ -83,10 +89,7 @@ impl<W: Wavelet> Fcwt<W> {
 
             inverse_buffer.copy_from_slice(&multiplied);
             inverse.process(&mut inverse_buffer);
-
-            if self.normalize {
-                normalize_fft(&mut inverse_buffer);
-            }
+            normalize_inverse_fft(&mut inverse_buffer);
 
             let start = scale_index * size;
             output[start..start + size].copy_from_slice(&inverse_buffer[..size]);
@@ -96,7 +99,7 @@ impl<W: Wavelet> Fcwt<W> {
     }
 }
 
-fn normalize_fft(out: &mut [Complex32]) {
+fn normalize_inverse_fft(out: &mut [Complex32]) {
     let size = out.len() as f32;
     for value in out {
         *value /= size;
@@ -231,7 +234,40 @@ mod tests {
     use rustfft::num_complex::Complex32;
 
     use super::{Fcwt, daughter_wavelet_multiply, daughter_wavelet_multiply_scalar};
-    use crate::{Morlet, ScaleType, Scales};
+    use crate::{Morlet, ScaleType, Scales, Wavelet};
+
+    #[derive(Clone, Debug)]
+    struct DoubleSidedUnitWavelet {
+        mother: Vec<f32>,
+    }
+
+    impl DoubleSidedUnitWavelet {
+        fn new() -> Self {
+            Self { mother: Vec::new() }
+        }
+    }
+
+    impl Wavelet for DoubleSidedUnitWavelet {
+        fn generate_frequency(&mut self, size: usize) {
+            self.mother = vec![1.0; size];
+        }
+
+        fn generate_time(&mut self, _size: usize, _scale: f32) -> Vec<Complex32> {
+            Vec::new()
+        }
+
+        fn support(&self, _scale: f32) -> usize {
+            0
+        }
+
+        fn mother(&self) -> &[f32] {
+            &self.mother
+        }
+
+        fn double_sided(&self) -> bool {
+            true
+        }
+    }
 
     #[test]
     fn simd_multiply_matches_scalar_reference() {
@@ -288,6 +324,24 @@ mod tests {
     }
 
     #[test]
+    fn default_output_is_inverse_fft_normalized() {
+        let scales = Scales::new(ScaleType::LinearScales, 64, 4.0, 16.0, 3).unwrap();
+        let input = (0..32)
+            .map(|i| (2.0 * std::f32::consts::PI * 4.0 * i as f32 / 64.0).sin())
+            .collect::<Vec<_>>();
+        let mut default_fcwt = Fcwt::new(Morlet::new(2.0));
+        let mut normalized_fcwt = Fcwt::new(Morlet::new(2.0)).with_normalization(true);
+
+        let default_output = default_fcwt.cwt_real(&input, &scales);
+        let normalized_output = normalized_fcwt.cwt_real(&input, &scales);
+
+        for (actual, expected) in default_output.iter().zip(normalized_output.iter()) {
+            assert_relative_eq!(actual.re, expected.re, epsilon = 1e-6);
+            assert_relative_eq!(actual.im, expected.im, epsilon = 1e-6);
+        }
+    }
+
+    #[test]
     fn complex_path_accepts_complex_samples() {
         let scales = Scales::new(ScaleType::LinearScales, 64, 4.0, 16.0, 3).unwrap();
         let mut fcwt = Fcwt::new(Morlet::new(2.0));
@@ -303,5 +357,25 @@ mod tests {
                 .iter()
                 .all(|value| value.re.is_finite() && value.im.is_finite())
         );
+    }
+
+    #[test]
+    fn complex_path_preserves_negative_frequency_content() {
+        let scales = Scales::from_scales(128, vec![2.0]).unwrap();
+        let mut fcwt = Fcwt::new(DoubleSidedUnitWavelet::new());
+        let input = (0..128)
+            .map(|i| {
+                let phase = -2.0 * std::f32::consts::PI * 8.0 * i as f32 / 128.0;
+                Complex32::new(phase.cos(), phase.sin())
+            })
+            .collect::<Vec<_>>();
+
+        let output = fcwt.cwt_complex(&input, &scales);
+        let max_norm = output
+            .iter()
+            .map(|value| value.norm())
+            .fold(0.0_f32, f32::max);
+
+        assert!(max_norm > 0.9);
     }
 }

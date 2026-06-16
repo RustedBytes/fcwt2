@@ -13,6 +13,11 @@ pub struct Morlet {
 
 impl Morlet {
     pub fn new(bandwidth: f32) -> Self {
+        assert!(
+            bandwidth.is_finite() && bandwidth > 0.0,
+            "Morlet bandwidth must be finite and greater than zero"
+        );
+
         Self {
             bandwidth,
             inverse_bandwidth: 1.0 / bandwidth,
@@ -95,5 +100,11 @@ mod tests {
         morlet.generate_frequency(64);
         assert_eq!(morlet.mother().len(), 64);
         assert!(morlet.mother().iter().any(|value| *value > 0.0));
+    }
+
+    #[test]
+    #[should_panic(expected = "Morlet bandwidth must be finite and greater than zero")]
+    fn rejects_invalid_bandwidth() {
+        let _ = Morlet::new(0.0);
     }
 }

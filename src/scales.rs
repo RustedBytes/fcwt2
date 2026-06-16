@@ -9,6 +9,8 @@ pub enum ScaleType {
 pub enum ScaleError {
     FrequencyAboveNyquist { frequency: f32, sample_rate: usize },
     EmptyScaleSet,
+    InvalidFrequencyRange { f0: f32, f1: f32 },
+    InvalidSampleRate,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -28,6 +30,12 @@ impl Scales {
         if nscales == 0 {
             return Err(ScaleError::EmptyScaleSet);
         }
+        if sample_rate == 0 {
+            return Err(ScaleError::InvalidSampleRate);
+        }
+        if !f0.is_finite() || !f1.is_finite() || f0 <= 0.0 || f1 <= 0.0 || f1 < f0 {
+            return Err(ScaleError::InvalidFrequencyRange { f0, f1 });
+        }
         check_nyquist(f1, sample_rate)?;
 
         let scales = match scale_type {
@@ -45,6 +53,15 @@ impl Scales {
     pub fn from_scales(sample_rate: usize, scales: Vec<f32>) -> Result<Self, ScaleError> {
         if scales.is_empty() {
             return Err(ScaleError::EmptyScaleSet);
+        }
+        if sample_rate == 0 {
+            return Err(ScaleError::InvalidSampleRate);
+        }
+        if scales
+            .iter()
+            .any(|scale| !scale.is_finite() || *scale <= 0.0)
+        {
+            return Err(ScaleError::InvalidFrequencyRange { f0: 0.0, f1: 0.0 });
         }
 
         Ok(Self {
@@ -175,6 +192,26 @@ mod tests {
                 frequency: 60.0,
                 sample_rate: 100
             }
+        );
+    }
+
+    #[test]
+    fn rejects_invalid_scale_parameters() {
+        assert_eq!(
+            Scales::new(ScaleType::LinearScales, 0, 10.0, 50.0, 4).unwrap_err(),
+            ScaleError::InvalidSampleRate
+        );
+        assert_eq!(
+            Scales::new(ScaleType::LinearScales, 100, 0.0, 50.0, 4).unwrap_err(),
+            ScaleError::InvalidFrequencyRange { f0: 0.0, f1: 50.0 }
+        );
+        assert_eq!(
+            Scales::new(ScaleType::LinearScales, 100, 20.0, 10.0, 4).unwrap_err(),
+            ScaleError::InvalidFrequencyRange { f0: 20.0, f1: 10.0 }
+        );
+        assert_eq!(
+            Scales::from_scales(100, vec![1.0, f32::NAN]).unwrap_err(),
+            ScaleError::InvalidFrequencyRange { f0: 0.0, f1: 0.0 }
         );
     }
 }
