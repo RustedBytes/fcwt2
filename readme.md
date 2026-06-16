@@ -4,8 +4,7 @@
 
 Rust implementation of the fast Continuous Wavelet Transform originally written in C++.
 
-This crate replaces the original C++/KFR implementation with an idiomatic Rust
-API. It uses [`rustfft`](https://crates.io/crates/rustfft) for FFT planning and
+It uses [`rustfft`](https://crates.io/crates/rustfft) for FFT planning and
 execution, and nightly Rust `portable_simd` for the daughter-wavelet frequency
 multiplication.
 
