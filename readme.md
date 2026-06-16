@@ -79,6 +79,10 @@ transform = fcwt.Fcwt.morlet(2.0)
 coefficients = transform.cwt_real([0.0] * 1024, scales)
 ```
 
+Tagged releases matching `v*` build Python wheels on Linux, macOS, and Windows
+with GitHub Actions and upload the wheels plus source distribution to the
+corresponding GitHub Release.
+
 ## Acknowledgements
 
 - Original library fCWT: https://github.com/fastlib/fCWT
