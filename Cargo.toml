@@ -1,0 +1,17 @@
+[package]
+name = "fcwt"
+version = "1.0.0"
+edition = "2024"
+description = "Rust implementation of the fast Continuous Wavelet Transform"
+license = "Apache-2.0"
+
+[dependencies]
+rustfft = "6.4.1"
+
+[dev-dependencies]
+approx = "0.5"
+criterion = "0.8.2"
+
+[[bench]]
+name = "cwt"
+harness = false

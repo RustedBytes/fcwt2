@@ -1,0 +1,8 @@
+*.DS_Store
+__pycache__
+.venv/
+*.egg-info
+*.so
+*.wis
+build/
+target/
