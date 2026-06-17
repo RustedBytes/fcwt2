@@ -4,7 +4,7 @@ build-backend = "maturin"
 
 [project]
 name = "fcwt2"
-version = "1.1.0"
+version = "1.2.0"
 description = "Python bindings for the Rust fCWT implementation"
 requires-python = ">=3.8"
 license = "Apache-2.0"
