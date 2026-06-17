@@ -1,5 +1,6 @@
 # fCWT in Rust
 
+[![CI](https://github.com/RustedBytes/fcwt2/actions/workflows/ci.yml/badge.svg)](https://github.com/RustedBytes/fcwt2/actions/workflows/ci.yml)
 [![Crates.io Version](https://img.shields.io/crates/v/fcwt2)](https://crates.io/crates/fcwt2)
 [![PyPI - Version](https://img.shields.io/pypi/v/fcwt2)](https://pypi.org/project/fcwt2/)
 
