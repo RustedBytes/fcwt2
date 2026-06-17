@@ -51,6 +51,33 @@ samples:
 cargo bench --bench cwt
 ```
 
+### My homelab benchmarks
+
+```
+Running benches/cwt.rs (target/release/deps/cwt-6c2d4260722aeb78)
+cwt_real/1024           time:   [320.71 µs 321.58 µs 322.68 µs]
+                        thrpt:  [203.10 Melem/s 203.79 Melem/s 204.34 Melem/s]
+Found 3 outliers among 100 measurements (3.00%)
+  3 (3.00%) high severe
+Benchmarking cwt_real/4096: Warming up for 3.0000 s
+cwt_real/4096           time:   [1.6010 ms 1.6288 ms 1.6622 ms]
+                        thrpt:  [157.71 Melem/s 160.95 Melem/s 163.74 Melem/s]
+Found 15 outliers among 100 measurements (15.00%)
+  2 (2.00%) high mild
+  13 (13.00%) high severe
+
+cwt_complex/1024        time:   [325.21 µs 326.07 µs 327.12 µs]
+                        thrpt:  [200.34 Melem/s 200.99 Melem/s 201.52 Melem/s]
+Found 3 outliers among 100 measurements (3.00%)
+  2 (2.00%) high mild
+  1 (1.00%) high severe
+Benchmarking cwt_complex/4096: Warming up for 3.0000 s
+cwt_complex/4096        time:   [1.4950 ms 1.4991 ms 1.5039 ms]
+                        thrpt:  [174.31 Melem/s 174.86 Melem/s 175.35 Melem/s]
+Found 1 outliers among 100 measurements (1.00%)
+  1 (1.00%) high mild
+```
+
 ## Python bindings
 
 PyO3 bindings are available behind the optional `python` feature:
