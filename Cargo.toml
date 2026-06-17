@@ -2,6 +2,7 @@
 name = "fcwt2"
 version = "1.2.0"
 edition = "2024"
+authors = ["Yehor Smoliakov <egorsmkv@gmail.com>"]
 description = "Rust implementation of the fast Continuous Wavelet Transform"
 license = "Apache-2.0"
 documentation = "https://docs.rs/fcwt2"
