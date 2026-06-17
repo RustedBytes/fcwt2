@@ -133,7 +133,6 @@ impl PyScales {
 struct PyFcwt {
     inner: Fcwt<Morlet>,
     bandwidth: f32,
-    normalize: bool,
 }
 
 #[pymethods]
@@ -156,30 +155,27 @@ impl PyFcwt {
     }
 
     fn with_normalization(&mut self, normalize: bool) {
-        self.normalize = normalize;
-        self.rebuild();
+        self.inner.set_normalization(normalize);
     }
 
     #[getter]
     fn normalization(&self) -> bool {
-        self.normalize
+        self.inner.normalization()
     }
 
     #[getter]
     fn normalize(&self) -> bool {
-        self.normalize
+        self.inner.normalization()
     }
 
     #[setter]
     fn set_normalization(&mut self, normalize: bool) {
-        self.normalize = normalize;
-        self.rebuild();
+        self.inner.set_normalization(normalize);
     }
 
     #[setter]
     fn set_normalize(&mut self, normalize: bool) {
-        self.normalize = normalize;
-        self.rebuild();
+        self.inner.set_normalization(normalize);
     }
 
     #[getter]
@@ -210,7 +206,7 @@ impl PyFcwt {
         format!(
             "Fcwt(bandwidth={}, normalize={})",
             self.bandwidth,
-            py_bool(self.normalize)
+            py_bool(self.inner.normalization())
         )
     }
 }
@@ -221,12 +217,7 @@ impl PyFcwt {
         Self {
             inner: Fcwt::new(wavelet).with_normalization(normalize),
             bandwidth,
-            normalize,
         }
-    }
-
-    fn rebuild(&mut self) {
-        self.inner = Fcwt::new(Morlet::new(self.bandwidth)).with_normalization(self.normalize);
     }
 }
 

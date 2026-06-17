@@ -27,6 +27,14 @@ impl<W> Fcwt<W> {
         self
     }
 
+    pub fn set_normalization(&mut self, normalize: bool) {
+        self.normalize = normalize;
+    }
+
+    pub fn normalization(&self) -> bool {
+        self.normalize
+    }
+
     pub fn wavelet(&self) -> &W {
         &self.wavelet
     }
@@ -38,36 +46,40 @@ impl<W> Fcwt<W> {
 
 impl<W: Wavelet> Fcwt<W> {
     pub fn cwt_real(&mut self, input: &[f32], scales: &Scales) -> Vec<Complex32> {
-        let complex_input = input
-            .iter()
-            .copied()
-            .map(|value| Complex32::new(value, 0.0))
-            .collect::<Vec<_>>();
-        self.cwt_inner(&complex_input, scales, true)
+        self.cwt_inner(input.len(), scales, true, |input_hat| {
+            for (sample, value) in input_hat.iter_mut().zip(input.iter().copied()) {
+                *sample = Complex32::new(value, 0.0);
+            }
+        })
     }
 
     pub fn cwt_complex(&mut self, input: &[Complex32], scales: &Scales) -> Vec<Complex32> {
-        self.cwt_inner(input, scales, false)
+        self.cwt_inner(input.len(), scales, false, |input_hat| {
+            input_hat[..input.len()].copy_from_slice(input);
+        })
     }
 
-    fn cwt_inner(
+    fn cwt_inner<F>(
         &mut self,
-        input: &[Complex32],
+        size: usize,
         scales: &Scales,
         mirror_real_spectrum: bool,
-    ) -> Vec<Complex32> {
-        if input.is_empty() {
+        fill_input: F,
+    ) -> Vec<Complex32>
+    where
+        F: FnOnce(&mut [Complex32]),
+    {
+        if size == 0 {
             return Vec::new();
         }
 
-        let size = input.len();
         let fft_size = next_power_of_two_len(size);
         let mut planner = FftPlanner::<f32>::new();
         let forward = planner.plan_fft_forward(fft_size);
         let inverse = planner.plan_fft_inverse(fft_size);
 
         let mut input_hat = vec![Complex32::ZERO; fft_size];
-        input_hat[..size].copy_from_slice(input);
+        fill_input(&mut input_hat);
         forward.process(&mut input_hat);
 
         if mirror_real_spectrum {
@@ -197,7 +209,7 @@ fn daughter_wavelet_multiply(
     }
 }
 
-#[allow(dead_code)]
+#[cfg(test)]
 fn daughter_wavelet_multiply_scalar(
     input: &[Complex32],
     output: &mut [Complex32],
@@ -346,6 +358,17 @@ mod tests {
             assert_relative_eq!(actual.re, expected.re, epsilon = 1e-6);
             assert_relative_eq!(actual.im, expected.im, epsilon = 1e-6);
         }
+    }
+
+    #[test]
+    fn normalization_flag_can_be_mutated() {
+        let mut fcwt = Fcwt::new(Morlet::new(2.0));
+
+        assert!(fcwt.normalization());
+        fcwt.set_normalization(false);
+        assert!(!fcwt.normalization());
+        fcwt.set_normalization(true);
+        assert!(fcwt.normalization());
     }
 
     #[test]
