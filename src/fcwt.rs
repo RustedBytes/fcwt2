@@ -11,14 +11,19 @@ const LANES: usize = 8;
 #[derive(Clone, Debug)]
 pub struct Fcwt<W> {
     wavelet: W,
+    normalize: bool,
 }
 
 impl<W> Fcwt<W> {
     pub fn new(wavelet: W) -> Self {
-        Self { wavelet }
+        Self {
+            wavelet,
+            normalize: true,
+        }
     }
 
-    pub fn with_normalization(self, _normalize: bool) -> Self {
+    pub fn with_normalization(mut self, normalize: bool) -> Self {
+        self.normalize = normalize;
         self
     }
 
@@ -89,7 +94,9 @@ impl<W: Wavelet> Fcwt<W> {
 
             inverse_buffer.copy_from_slice(&multiplied);
             inverse.process(&mut inverse_buffer);
-            normalize_inverse_fft(&mut inverse_buffer);
+            if self.normalize {
+                normalize_inverse_fft(&mut inverse_buffer);
+            }
 
             let start = scale_index * size;
             output[start..start + size].copy_from_slice(&inverse_buffer[..size]);
@@ -338,6 +345,25 @@ mod tests {
         for (actual, expected) in default_output.iter().zip(normalized_output.iter()) {
             assert_relative_eq!(actual.re, expected.re, epsilon = 1e-6);
             assert_relative_eq!(actual.im, expected.im, epsilon = 1e-6);
+        }
+    }
+
+    #[test]
+    fn normalization_can_be_disabled() {
+        let scales = Scales::new(ScaleType::LinearScales, 64, 4.0, 16.0, 3).unwrap();
+        let input = (0..32)
+            .map(|i| (2.0 * std::f32::consts::PI * 4.0 * i as f32 / 64.0).sin())
+            .collect::<Vec<_>>();
+        let mut normalized_fcwt = Fcwt::new(Morlet::new(2.0));
+        let mut raw_fcwt = Fcwt::new(Morlet::new(2.0)).with_normalization(false);
+
+        let normalized_output = normalized_fcwt.cwt_real(&input, &scales);
+        let raw_output = raw_fcwt.cwt_real(&input, &scales);
+        let fft_size = input.len().next_power_of_two() as f32;
+
+        for (normalized, raw) in normalized_output.iter().zip(raw_output.iter()) {
+            assert_relative_eq!(raw.re, normalized.re * fft_size, epsilon = 1e-4);
+            assert_relative_eq!(raw.im, normalized.im * fft_size, epsilon = 1e-4);
         }
     }
 
