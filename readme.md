@@ -3,7 +3,7 @@
 [![Crates.io Version](https://img.shields.io/crates/v/fcwt2)](https://crates.io/crates/fcwt2)
 [![PyPI - Version](https://img.shields.io/pypi/v/fcwt2)](https://pypi.org/project/fcwt2/)
 
-Rust implementation of the fast Continuous Wavelet Transform originally written in C++.
+Rust implementation of the fast Continuous Wavelet Transform.
 
 It uses [`rustfft`](https://crates.io/crates/rustfft) for FFT planning and
 execution, and nightly Rust `portable_simd` for the daughter-wavelet frequency
