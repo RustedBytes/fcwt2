@@ -1,6 +1,7 @@
 # fCWT in Rust
 
 [![Crates.io Version](https://img.shields.io/crates/v/fcwt2)](https://crates.io/crates/fcwt2)
+[![PyPI - Version](https://img.shields.io/pypi/v/fcwt2)](https://pypi.org/project/fcwt2/)
 
 Rust implementation of the fast Continuous Wavelet Transform originally written in C++.
 
