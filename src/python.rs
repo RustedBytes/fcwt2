@@ -5,7 +5,11 @@ use pyo3::{
 };
 use rustfft::num_complex::Complex32;
 
-use crate::{Fcwt, Morlet, ScaleError, ScaleType, Scales};
+use crate::{
+    DtcwtLevel, DtcwtTree, DualTreeComplexWaveletTransform, Fcwt, Morlet, PacketBand, ScaleError,
+    ScaleType, Scales, StationaryWaveletTransform, SwtCoefficients, SwtLevel, TransformError,
+    WaveletPacketNode, WaveletPacketTransform, WaveletPacketTree,
+};
 
 #[pyclass(name = "Morlet", skip_from_py_object)]
 #[derive(Clone)]
@@ -221,6 +225,291 @@ impl PyFcwt {
     }
 }
 
+#[pyclass(name = "WaveletPacketTransform", skip_from_py_object)]
+#[derive(Clone)]
+struct PyWaveletPacketTransform {
+    inner: WaveletPacketTransform,
+}
+
+#[pymethods]
+impl PyWaveletPacketTransform {
+    #[new]
+    fn new(levels: usize) -> Self {
+        Self {
+            inner: WaveletPacketTransform::new(levels),
+        }
+    }
+
+    #[getter]
+    fn levels(&self) -> usize {
+        self.inner.levels()
+    }
+
+    fn decompose(&self, input: Vec<f32>) -> PyResult<PyWaveletPacketTree> {
+        self.inner
+            .decompose(&input)
+            .map(|inner| PyWaveletPacketTree { inner })
+            .map_err(transform_error)
+    }
+
+    fn __repr__(&self) -> String {
+        format!("WaveletPacketTransform(levels={})", self.inner.levels())
+    }
+}
+
+#[pyclass(name = "WaveletPacketTree", skip_from_py_object)]
+#[derive(Clone)]
+struct PyWaveletPacketTree {
+    inner: WaveletPacketTree,
+}
+
+#[pymethods]
+impl PyWaveletPacketTree {
+    #[getter]
+    fn levels(&self) -> usize {
+        self.inner.levels()
+    }
+
+    fn leaves(&self) -> Vec<PyWaveletPacketNode> {
+        self.inner
+            .leaves()
+            .iter()
+            .cloned()
+            .map(|inner| PyWaveletPacketNode { inner })
+            .collect()
+    }
+
+    fn reconstruct(&self) -> PyResult<Vec<f32>> {
+        self.inner.reconstruct().map_err(transform_error)
+    }
+
+    fn __repr__(&self) -> String {
+        format!(
+            "WaveletPacketTree(levels={}, leaves={})",
+            self.inner.levels(),
+            self.inner.leaves().len()
+        )
+    }
+}
+
+#[pyclass(name = "WaveletPacketNode", skip_from_py_object)]
+#[derive(Clone)]
+struct PyWaveletPacketNode {
+    inner: WaveletPacketNode,
+}
+
+#[pymethods]
+impl PyWaveletPacketNode {
+    #[getter]
+    fn path(&self) -> Vec<&'static str> {
+        self.inner
+            .path
+            .iter()
+            .map(|band| match band {
+                PacketBand::Approximation => "a",
+                PacketBand::Detail => "d",
+            })
+            .collect()
+    }
+
+    #[getter]
+    fn coefficients(&self) -> Vec<f32> {
+        self.inner.coefficients.clone()
+    }
+
+    fn __repr__(&self) -> String {
+        format!(
+            "WaveletPacketNode(path={:?}, coefficients={})",
+            self.path(),
+            self.inner.coefficients.len()
+        )
+    }
+}
+
+#[pyclass(name = "StationaryWaveletTransform", skip_from_py_object)]
+#[derive(Clone)]
+struct PyStationaryWaveletTransform {
+    inner: StationaryWaveletTransform,
+}
+
+#[pymethods]
+impl PyStationaryWaveletTransform {
+    #[new]
+    fn new(levels: usize) -> Self {
+        Self {
+            inner: StationaryWaveletTransform::new(levels),
+        }
+    }
+
+    #[getter]
+    fn levels(&self) -> usize {
+        self.inner.levels()
+    }
+
+    fn decompose(&self, input: Vec<f32>) -> PyResult<PySwtCoefficients> {
+        self.inner
+            .decompose(&input)
+            .map(|inner| PySwtCoefficients { inner })
+            .map_err(transform_error)
+    }
+
+    fn reconstruct(&self, coefficients: PyRef<'_, PySwtCoefficients>) -> PyResult<Vec<f32>> {
+        self.inner
+            .reconstruct(&coefficients.inner)
+            .map_err(transform_error)
+    }
+
+    fn __repr__(&self) -> String {
+        format!("StationaryWaveletTransform(levels={})", self.inner.levels())
+    }
+}
+
+#[pyclass(name = "SwtCoefficients", skip_from_py_object)]
+#[derive(Clone)]
+struct PySwtCoefficients {
+    inner: SwtCoefficients,
+}
+
+#[pymethods]
+impl PySwtCoefficients {
+    #[getter]
+    fn input_len(&self) -> usize {
+        self.inner.input_len()
+    }
+
+    fn levels(&self) -> Vec<PySwtLevel> {
+        self.inner
+            .levels()
+            .iter()
+            .cloned()
+            .map(|inner| PySwtLevel { inner })
+            .collect()
+    }
+
+    fn __repr__(&self) -> String {
+        format!(
+            "SwtCoefficients(input_len={}, levels={})",
+            self.inner.input_len(),
+            self.inner.levels().len()
+        )
+    }
+}
+
+#[pyclass(name = "SwtLevel", skip_from_py_object)]
+#[derive(Clone)]
+struct PySwtLevel {
+    inner: SwtLevel,
+}
+
+#[pymethods]
+impl PySwtLevel {
+    #[getter]
+    fn approximation(&self) -> Vec<f32> {
+        self.inner.approximation.clone()
+    }
+
+    #[getter]
+    fn detail(&self) -> Vec<f32> {
+        self.inner.detail.clone()
+    }
+
+    fn __repr__(&self) -> String {
+        format!(
+            "SwtLevel(approximation={}, detail={})",
+            self.inner.approximation.len(),
+            self.inner.detail.len()
+        )
+    }
+}
+
+#[pyclass(name = "DualTreeComplexWaveletTransform", skip_from_py_object)]
+#[derive(Clone)]
+struct PyDualTreeComplexWaveletTransform {
+    inner: DualTreeComplexWaveletTransform,
+}
+
+#[pymethods]
+impl PyDualTreeComplexWaveletTransform {
+    #[new]
+    fn new(levels: usize) -> Self {
+        Self {
+            inner: DualTreeComplexWaveletTransform::new(levels),
+        }
+    }
+
+    #[getter]
+    fn levels(&self) -> usize {
+        self.inner.levels()
+    }
+
+    fn decompose(&self, input: Vec<f32>) -> PyResult<PyDtcwtTree> {
+        self.inner
+            .decompose(&input)
+            .map(|inner| PyDtcwtTree { inner })
+            .map_err(transform_error)
+    }
+
+    fn reconstruct(&self, tree: PyRef<'_, PyDtcwtTree>) -> PyResult<Vec<f32>> {
+        self.inner.reconstruct(&tree.inner).map_err(transform_error)
+    }
+
+    fn __repr__(&self) -> String {
+        format!(
+            "DualTreeComplexWaveletTransform(levels={})",
+            self.inner.levels()
+        )
+    }
+}
+
+#[pyclass(name = "DtcwtTree", skip_from_py_object)]
+#[derive(Clone)]
+struct PyDtcwtTree {
+    inner: DtcwtTree,
+}
+
+#[pymethods]
+impl PyDtcwtTree {
+    #[getter]
+    fn lowpass(&self) -> Vec<f32> {
+        self.inner.lowpass().to_vec()
+    }
+
+    fn highpasses(&self) -> Vec<PyDtcwtLevel> {
+        self.inner
+            .highpasses()
+            .iter()
+            .cloned()
+            .map(|inner| PyDtcwtLevel { inner })
+            .collect()
+    }
+
+    fn __repr__(&self) -> String {
+        format!(
+            "DtcwtTree(lowpass={}, highpasses={})",
+            self.inner.lowpass().len(),
+            self.inner.highpasses().len()
+        )
+    }
+}
+
+#[pyclass(name = "DtcwtLevel", skip_from_py_object)]
+#[derive(Clone)]
+struct PyDtcwtLevel {
+    inner: DtcwtLevel,
+}
+
+#[pymethods]
+impl PyDtcwtLevel {
+    #[getter]
+    fn detail<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyList>> {
+        complex_list(py, self.inner.detail.clone())
+    }
+
+    fn __repr__(&self) -> String {
+        format!("DtcwtLevel(detail={})", self.inner.detail.len())
+    }
+}
+
 fn complex_list<'py>(py: Python<'py>, values: Vec<Complex32>) -> PyResult<Bound<'py, PyList>> {
     let values = values
         .into_iter()
@@ -265,6 +554,19 @@ fn scale_error(error: ScaleError) -> PyErr {
     }
 }
 
+fn transform_error(error: TransformError) -> PyErr {
+    match error {
+        TransformError::EmptyInput => PyValueError::new_err("input cannot be empty"),
+        TransformError::NonPowerOfTwo { len } => {
+            PyValueError::new_err(format!("input length {len} is not a power of two"))
+        }
+        TransformError::LevelTooDeep { levels, max_levels } => PyValueError::new_err(format!(
+            "levels {levels} exceeds maximum decomposition level {max_levels}"
+        )),
+        TransformError::InvalidCoefficientTree => PyValueError::new_err("invalid coefficient tree"),
+    }
+}
+
 fn validate_bandwidth(bandwidth: f32) -> PyResult<()> {
     if bandwidth.is_finite() && bandwidth > 0.0 {
         Ok(())
@@ -299,6 +601,15 @@ fn fcwt2(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyMorlet>()?;
     m.add_class::<PyScales>()?;
     m.add_class::<PyFcwt>()?;
+    m.add_class::<PyWaveletPacketTransform>()?;
+    m.add_class::<PyWaveletPacketTree>()?;
+    m.add_class::<PyWaveletPacketNode>()?;
+    m.add_class::<PyStationaryWaveletTransform>()?;
+    m.add_class::<PySwtCoefficients>()?;
+    m.add_class::<PySwtLevel>()?;
+    m.add_class::<PyDualTreeComplexWaveletTransform>()?;
+    m.add_class::<PyDtcwtTree>()?;
+    m.add_class::<PyDtcwtLevel>()?;
     m.add("FCWT", m.getattr("Fcwt")?)?;
     Ok(())
 }

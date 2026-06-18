@@ -88,10 +88,11 @@ PyO3 bindings are available behind the optional `python` feature:
 cargo build --features python
 ```
 
-The module exposes `Morlet`, `Scales`, and `Fcwt`/`FCWT`. Real transforms accept
-a list of floats; complex transforms accept Python `complex` values or
-`(real, imag)` tuples and return Python `complex` values in the same scale-major
-layout as the Rust API.
+The module exposes `Morlet`, `Scales`, `Fcwt`/`FCWT`,
+`WaveletPacketTransform`, `StationaryWaveletTransform`, and
+`DualTreeComplexWaveletTransform`. Real transforms accept a list of floats;
+complex transforms accept Python `complex` values or `(real, imag)` tuples and
+return Python `complex` values in the same scale-major layout as the Rust API.
 
 To build/install the Python extension with maturin:
 
@@ -110,6 +111,16 @@ transform = fcwt2.Fcwt(2.0)
 coefficients = transform.cwt_real([0.0] * 1024, scales)
 
 complex_coefficients = transform.cwt_complex([1.0 + 0.0j] * 1024, scales)
+
+packet = fcwt2.WaveletPacketTransform(3)
+tree = packet.decompose([0.0] * 8)
+reconstructed = tree.reconstruct()
+
+swt = fcwt2.StationaryWaveletTransform(2)
+swt_coefficients = swt.decompose([0.0] * 8)
+
+dtcwt = fcwt2.DualTreeComplexWaveletTransform(2)
+dtcwt_tree = dtcwt.decompose([0.0] * 8)
 ```
 
 Tagged releases matching `v*` build Python wheels on Linux, macOS, and Windows
