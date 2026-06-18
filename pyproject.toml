@@ -16,3 +16,8 @@ license = "Apache-2.0"
 [tool.maturin]
 features = ["python"]
 module-name = "fcwt2"
+
+[dependency-groups]
+dev = [
+    "ruff>=0.15.17",
+]
