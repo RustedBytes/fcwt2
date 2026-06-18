@@ -128,7 +128,7 @@ impl DualTreeComplexWaveletTransform {
         }];
 
         for _ in 1..self.levels {
-            if lo.len() % 4 != 0 {
+            if !lo.len().is_multiple_of(4) {
                 lo = extend_once(&lo);
             }
             let hi = coldfilt(&lo, &QSHIFT_A_H1B, &QSHIFT_A_H1A)?;
@@ -234,7 +234,7 @@ fn colfilter(input: &[f32], filter: &[f32]) -> Vec<f32> {
 }
 
 fn coldfilt(input: &[f32], ha: &[f32], hb: &[f32]) -> Result<Vec<f32>, TransformError> {
-    if input.len() % 4 != 0 || ha.len() != hb.len() || ha.len() % 2 != 0 {
+    if !input.len().is_multiple_of(4) || ha.len() != hb.len() || !ha.len().is_multiple_of(2) {
         return Err(TransformError::InvalidCoefficientTree);
     }
 
@@ -275,7 +275,7 @@ fn coldfilt(input: &[f32], ha: &[f32], hb: &[f32]) -> Result<Vec<f32>, Transform
 }
 
 fn colifilt(input: &[f32], ha: &[f32], hb: &[f32]) -> Result<Vec<f32>, TransformError> {
-    if input.len() % 2 != 0 || ha.len() != hb.len() || ha.len() % 2 != 0 {
+    if !input.len().is_multiple_of(2) || ha.len() != hb.len() || !ha.len().is_multiple_of(2) {
         return Err(TransformError::InvalidCoefficientTree);
     }
 
@@ -293,7 +293,7 @@ fn colifilt(input: &[f32], ha: &[f32], hb: &[f32]) -> Result<Vec<f32>, Transform
     let dot_positive = dot(ha, hb) > 0.0;
     let mut output = vec![0.0; len * 2];
 
-    if half % 2 == 0 {
+    if half.is_multiple_of(2) {
         let t = (3..len + filter_len).step_by(2).collect::<Vec<_>>();
         let (ta, tb) = if dot_positive {
             (t.clone(), offset_values(&t, -1))
