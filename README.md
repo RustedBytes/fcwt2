@@ -131,3 +131,5 @@ corresponding GitHub Release.
 
 - Original library fCWT: https://github.com/fastlib/fCWT
 - Fixed fCWT in C++: https://github.com/ThirdLetterC/fCWT 
+- PyWavelets - Wavelet Transforms in Python: https://pywavelets.readthedocs.io/en/latest/
+- dtcwt library: https://dtcwt.readthedocs.io/en/0.12.0/
