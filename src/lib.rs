@@ -1,17 +1,27 @@
 #![feature(portable_simd)]
 
+mod discrete;
+pub mod dual_tree_complex;
 mod fcwt;
 mod morlet;
 #[cfg(feature = "python")]
 mod python;
 mod scales;
+pub mod stationary;
 mod wavelet;
+pub mod wavelet_packet;
 
+pub use discrete::TransformError;
+pub use dual_tree_complex::{DtcwtLevel, DtcwtTree, DualTreeComplexWaveletTransform};
 pub use fcwt::Fcwt;
 pub use morlet::Morlet;
 pub use rustfft::num_complex::Complex32;
 pub use scales::{ScaleError, ScaleType, Scales};
+pub use stationary::{StationaryWaveletTransform, SwtCoefficients, SwtLevel};
 pub use wavelet::Wavelet;
+pub use wavelet_packet::{
+    PacketBand, WaveletPacketNode, WaveletPacketTransform, WaveletPacketTree,
+};
 
 const PI: f32 = std::f32::consts::PI;
 const IPI4: f32 = 0.751_125_6_f32;
