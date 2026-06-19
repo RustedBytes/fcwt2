@@ -53,6 +53,15 @@ samples:
 cargo bench --bench cwt
 ```
 
+## Examples
+
+Run the wavelet packet denoising example to see article-style basis selection
+combined with soft-threshold reconstruction:
+
+```sh
+cargo run --example wavelet_packet_denoiser
+```
+
 ### My homelab benchmarks
 
 ```

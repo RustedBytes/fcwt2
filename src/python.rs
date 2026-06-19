@@ -509,6 +509,26 @@ impl PyBasisScore {
         self.inner.sharpness
     }
 
+    #[getter]
+    fn pdf_peak(&self) -> f32 {
+        self.inner.pdf_peak
+    }
+
+    #[getter]
+    fn pdf_center(&self) -> f32 {
+        self.inner.pdf_center
+    }
+
+    #[getter]
+    fn pdf_tail_mass(&self) -> f32 {
+        self.inner.pdf_tail_mass
+    }
+
+    #[getter]
+    fn pdf_entropy(&self) -> f32 {
+        self.inner.pdf_entropy
+    }
+
     fn __repr__(&self) -> String {
         format!(
             "BasisScore(wavelet='{}', score={})",

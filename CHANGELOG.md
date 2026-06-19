@@ -11,10 +11,12 @@ All notable changes to this project will be documented in this file.
 - Added `WaveletPacketTransform::with_wavelet(...)` and `StationaryWaveletTransform::with_wavelet(...)` while keeping `new(levels)` as the Haar default.
 - Added custom filter-bank construction and validation for finite, matching-length analysis/synthesis filters.
 - Added basis scoring and selection helpers: `score_basis`, `select_basis`, `BasisScore`, `SelectedBasis`, `TransformKind`, and `BasisSelectionCriterion`.
+- Added explicit histogram/PDF-shape diagnostics to `BasisScore`: peak mass, center mass, tail mass, and normalized entropy.
 - Added coefficient ownership helpers for safer modified-coefficient reconstruction:
   `WaveletPacketTree::into_leaves`, `WaveletPacketTree::from_leaves`, `WaveletPacketTree::from_leaves_with_filter_bank`,
   `SwtCoefficients::into_levels`, and `SwtCoefficients::from_levels`.
 - Added Python bindings for named packet/SWT wavelet selection and basis scoring/selection.
+- Added `examples/wavelet_packet_denoiser.rs`, demonstrating basis selection plus soft-threshold denoising.
 - Added acknowledgement for the MDPI article "Wavelet Basis Selection in Signal Denoising Based on Wavelet-Coefficient Distribution Shape".
 
 ### Changed
@@ -32,3 +34,4 @@ All notable changes to this project will be documented in this file.
 - Added round-trip reconstruction coverage for supported non-Haar packet and stationary wavelet transforms.
 - Added filter-bank validation tests.
 - Added basis selector diagnostics and short-coarsest-detail-band error tests.
+- Added PDF-shape tests for peaked/sparse versus broad coefficient distributions.

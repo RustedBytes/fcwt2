@@ -26,6 +26,10 @@ pub struct BasisScore {
     pub interquartile_range: f32,
     pub central_concentration: f32,
     pub sharpness: f32,
+    pub pdf_peak: f32,
+    pub pdf_center: f32,
+    pub pdf_tail_mass: f32,
+    pub pdf_entropy: f32,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -147,7 +151,12 @@ fn score_detail(
     } else {
         0.0
     };
-    let score = central_concentration / width + sharpness.ln_1p();
+    let pdf_shape = estimate_pdf_shape(detail);
+    let peak_to_tail = pdf_shape.pdf_peak / (pdf_shape.pdf_tail_mass + f32::EPSILON);
+    let score = central_concentration / width
+        + sharpness.ln_1p()
+        + peak_to_tail.ln_1p()
+        + (1.0 - pdf_shape.pdf_entropy);
 
     Ok(BasisScore {
         wavelet,
@@ -161,7 +170,87 @@ fn score_detail(
         interquartile_range,
         central_concentration,
         sharpness,
+        pdf_peak: pdf_shape.pdf_peak,
+        pdf_center: pdf_shape.pdf_center,
+        pdf_tail_mass: pdf_shape.pdf_tail_mass,
+        pdf_entropy: pdf_shape.pdf_entropy,
     })
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct PdfShape {
+    pdf_peak: f32,
+    pdf_center: f32,
+    pdf_tail_mass: f32,
+    pdf_entropy: f32,
+}
+
+fn estimate_pdf_shape(values: &[f32]) -> PdfShape {
+    let max_abs = values
+        .iter()
+        .map(|value| value.abs())
+        .fold(0.0_f32, f32::max);
+    if max_abs <= f32::EPSILON {
+        return PdfShape {
+            pdf_peak: 1.0,
+            pdf_center: 1.0,
+            pdf_tail_mass: 0.0,
+            pdf_entropy: 0.0,
+        };
+    }
+
+    let bin_count = ((values.len() as f32).sqrt().round() as usize).clamp(8, 64);
+    let min = -max_abs;
+    let width = (2.0 * max_abs) / bin_count as f32;
+    let mut bins = vec![0usize; bin_count];
+
+    for value in values {
+        let scaled = ((*value - min) / width).floor();
+        let index = (scaled as isize).clamp(0, bin_count as isize - 1) as usize;
+        bins[index] += 1;
+    }
+
+    let count = values.len() as f32;
+    let probabilities = bins
+        .iter()
+        .map(|bin| *bin as f32 / count)
+        .collect::<Vec<_>>();
+    let pdf_peak = probabilities.iter().copied().fold(0.0_f32, f32::max);
+    let center_index = ((0.0 - min) / width).floor() as usize;
+    let pdf_center = probabilities[center_index.min(bin_count - 1)];
+    let pdf_entropy = normalized_entropy(&probabilities);
+
+    let tail_start = (0.75 * bin_count as f32).floor() as usize;
+    let pdf_tail_mass = probabilities
+        .iter()
+        .enumerate()
+        .filter(|(index, _)| *index >= tail_start || *index < bin_count - tail_start)
+        .map(|(_, probability)| *probability)
+        .sum();
+
+    PdfShape {
+        pdf_peak,
+        pdf_center,
+        pdf_tail_mass,
+        pdf_entropy,
+    }
+}
+
+fn normalized_entropy(probabilities: &[f32]) -> f32 {
+    let active_bins = probabilities
+        .iter()
+        .filter(|probability| **probability > 0.0)
+        .count();
+    if active_bins <= 1 {
+        return 0.0;
+    }
+
+    let entropy = probabilities
+        .iter()
+        .filter(|probability| **probability > 0.0)
+        .map(|probability| -probability * probability.ln())
+        .sum::<f32>();
+    entropy / (active_bins as f32).ln()
 }
 
 fn median(mut values: Vec<f32>) -> f32 {
@@ -180,8 +269,11 @@ fn percentile_sorted(values: &mut [f32], p: f32) -> f32 {
 
 #[cfg(test)]
 mod tests {
-    use super::{BasisSelectionCriterion, TransformKind, score_basis, select_basis};
+    use super::{
+        BasisSelectionCriterion, TransformKind, estimate_pdf_shape, score_basis, select_basis,
+    };
     use crate::{DiscreteWavelet, TransformError};
+    use approx::assert_relative_eq;
 
     #[test]
     fn scores_return_shape_diagnostics() {
@@ -200,6 +292,10 @@ mod tests {
         assert_eq!(score.subband_level, 2);
         assert_eq!(score.coefficient_count, 4);
         assert!(score.score.is_finite());
+        assert!(score.pdf_peak.is_finite());
+        assert!(score.pdf_center.is_finite());
+        assert!(score.pdf_tail_mass.is_finite());
+        assert!(score.pdf_entropy.is_finite());
     }
 
     #[test]
@@ -231,5 +327,57 @@ mod tests {
             ),
             Err(TransformError::InvalidCoefficientTree)
         );
+    }
+
+    #[test]
+    fn pdf_shape_prefers_peaked_sparse_distributions() {
+        let sparse = [
+            0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 4.0, -4.0, 5.0, -5.0,
+        ];
+        let broad = [
+            -4.0, -3.5, -3.0, -2.5, -2.0, -1.5, -1.0, -0.5, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0,
+        ];
+
+        let sparse_shape = estimate_pdf_shape(&sparse);
+        let broad_shape = estimate_pdf_shape(&broad);
+
+        assert!(sparse_shape.pdf_peak > broad_shape.pdf_peak);
+        assert!(sparse_shape.pdf_center > broad_shape.pdf_center);
+        assert!(sparse_shape.pdf_entropy < broad_shape.pdf_entropy);
+    }
+
+    #[test]
+    fn selector_can_choose_basis_with_more_peaked_coarsest_detail() {
+        let input = [
+            0.0, 0.25, 0.5, 0.75, 8.0, 0.75, 0.5, 0.25, 0.0, -0.25, -0.5, -0.75, -8.0, -0.75, -0.5,
+            -0.25, 0.0, 0.25, 0.5, 0.75, 8.0, 0.75, 0.5, 0.25, 0.0, -0.25, -0.5, -0.75, -8.0,
+            -0.75, -0.5, -0.25,
+        ];
+        let selected = select_basis(
+            &input,
+            3,
+            &[
+                DiscreteWavelet::Haar,
+                DiscreteWavelet::Daubechies(2),
+                DiscreteWavelet::Symlet(4),
+            ],
+            TransformKind::WaveletPacket,
+            BasisSelectionCriterion::CoarsestDetailPdfShape,
+        )
+        .unwrap();
+
+        let selected_score = selected.score.score;
+        for score in selected.candidate_scores {
+            assert!(selected_score >= score.score);
+        }
+    }
+
+    #[test]
+    fn all_zero_detail_has_degenerate_pdf_at_center() {
+        let shape = estimate_pdf_shape(&[0.0; 16]);
+        assert_relative_eq!(shape.pdf_peak, 1.0);
+        assert_relative_eq!(shape.pdf_center, 1.0);
+        assert_relative_eq!(shape.pdf_tail_mass, 0.0);
+        assert_relative_eq!(shape.pdf_entropy, 0.0);
     }
 }

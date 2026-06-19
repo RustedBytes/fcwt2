@@ -64,6 +64,14 @@ impl WaveletFilterBank {
         {
             return Err(TransformError::InvalidWaveletFilterBank);
         }
+        if !reconstructs_circular_impulses(
+            &analysis_low,
+            &analysis_high,
+            &synthesis_low,
+            &synthesis_high,
+        ) {
+            return Err(TransformError::InvalidWaveletFilterBank);
+        }
 
         Ok(Self {
             name: name.into(),
@@ -133,6 +141,59 @@ fn qmf_highpass(low: &[f32]) -> Vec<f32> {
         .enumerate()
         .map(|(index, value)| if index % 2 == 0 { *value } else { -*value })
         .collect()
+}
+
+fn reconstructs_circular_impulses(
+    analysis_low: &[f32],
+    analysis_high: &[f32],
+    synthesis_low: &[f32],
+    synthesis_high: &[f32],
+) -> bool {
+    let len = (analysis_low.len() * 4).next_power_of_two().max(8);
+    for impulse_index in 0..len {
+        let mut input = vec![0.0; len];
+        input[impulse_index] = 1.0;
+        let (approximation, detail) = circular_downsample(&input, analysis_low, analysis_high);
+        let reconstructed =
+            circular_upsample(&approximation, &detail, synthesis_low, synthesis_high);
+        if !input
+            .iter()
+            .zip(reconstructed)
+            .all(|(expected, actual)| (*expected - actual).abs() <= 1e-3)
+        {
+            return false;
+        }
+    }
+    true
+}
+
+fn circular_downsample(input: &[f32], low: &[f32], high: &[f32]) -> (Vec<f32>, Vec<f32>) {
+    let out_len = input.len() / 2;
+    let mut approx = vec![0.0; out_len];
+    let mut detail = vec![0.0; out_len];
+
+    for out in 0..out_len {
+        for tap in 0..low.len() {
+            let sample = input[(2 * out + tap) % input.len()];
+            approx[out] += low[tap] * sample;
+            detail[out] += high[tap] * sample;
+        }
+    }
+
+    (approx, detail)
+}
+
+fn circular_upsample(approx: &[f32], detail: &[f32], low: &[f32], high: &[f32]) -> Vec<f32> {
+    let len = approx.len() * 2;
+    let mut output = vec![0.0; len];
+    for i in 0..approx.len() {
+        for tap in 0..low.len() {
+            let sample = (2 * i + tap) % len;
+            output[sample] += low[tap] * approx[i] + high[tap] * detail[i];
+        }
+    }
+
+    output
 }
 
 const HAAR_LO: [f32; 2] = [
@@ -241,6 +302,17 @@ mod tests {
         );
         assert_eq!(
             WaveletFilterBank::new("bad", 0, vec![f32::NAN], vec![1.0], vec![1.0], vec![1.0]),
+            Err(TransformError::InvalidWaveletFilterBank)
+        );
+        assert_eq!(
+            WaveletFilterBank::new(
+                "bad",
+                0,
+                vec![1.0, 0.0],
+                vec![1.0, 0.0],
+                vec![1.0, 0.0],
+                vec![1.0, 0.0],
+            ),
             Err(TransformError::InvalidWaveletFilterBank)
         );
     }
