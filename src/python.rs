@@ -283,6 +283,23 @@ struct PyWaveletPacketTree {
 
 #[pymethods]
 impl PyWaveletPacketTree {
+    #[staticmethod]
+    fn from_leaves(
+        levels: usize,
+        leaves: Vec<(Vec<String>, Vec<f32>)>,
+        wavelet: &str,
+    ) -> PyResult<Self> {
+        let leaves = leaves
+            .into_iter()
+            .map(|(path, coefficients)| {
+                parse_packet_path(path).map(|path| WaveletPacketNode { path, coefficients })
+            })
+            .collect::<PyResult<Vec<_>>>()?;
+        WaveletPacketTree::from_leaves(levels, leaves, parse_discrete_wavelet(wavelet)?)
+            .map(|inner| Self { inner })
+            .map_err(transform_error)
+    }
+
     #[getter]
     fn levels(&self) -> usize {
         self.inner.levels()
@@ -318,6 +335,13 @@ struct PyWaveletPacketNode {
 
 #[pymethods]
 impl PyWaveletPacketNode {
+    #[new]
+    fn new(path: Vec<String>, coefficients: Vec<f32>) -> PyResult<Self> {
+        parse_packet_path(path).map(|path| Self {
+            inner: WaveletPacketNode { path, coefficients },
+        })
+    }
+
     #[getter]
     fn path(&self) -> Vec<&'static str> {
         self.inner
@@ -780,6 +804,18 @@ fn parse_transform_kind(value: &str) -> PyResult<TransformKind> {
             "unsupported transform kind '{value}'"
         ))),
     }
+}
+
+fn parse_packet_path(path: Vec<String>) -> PyResult<Vec<PacketBand>> {
+    path.into_iter()
+        .map(|band| match band.as_str() {
+            "a" | "A" | "approximation" | "Approximation" => Ok(PacketBand::Approximation),
+            "d" | "D" | "detail" | "Detail" => Ok(PacketBand::Detail),
+            _ => Err(PyValueError::new_err(format!(
+                "unsupported packet band '{band}', expected 'a' or 'd'"
+            ))),
+        })
+        .collect()
 }
 
 fn transform_kind_name(value: TransformKind) -> &'static str {

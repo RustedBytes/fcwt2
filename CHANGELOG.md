@@ -16,7 +16,9 @@ All notable changes to this project will be documented in this file.
   `WaveletPacketTree::into_leaves`, `WaveletPacketTree::from_leaves`, `WaveletPacketTree::from_leaves_with_filter_bank`,
   `SwtCoefficients::into_levels`, and `SwtCoefficients::from_levels`.
 - Added Python bindings for named packet/SWT wavelet selection and basis scoring/selection.
+- Added Python packet-tree reconstruction from modified leaf data via `WaveletPacketTree.from_leaves(...)`.
 - Added `examples/wavelet_packet_denoiser.rs`, demonstrating basis selection plus soft-threshold denoising.
+- Added a Python notebook that visually mirrors the wavelet packet denoising example.
 - Added acknowledgement for the MDPI article "Wavelet Basis Selection in Signal Denoising Based on Wavelet-Coefficient Distribution Shape".
 
 ### Changed
