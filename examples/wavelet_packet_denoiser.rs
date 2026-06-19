@@ -46,7 +46,7 @@ fn threshold_packet_tree(
     let levels = tree.levels();
     let mut leaves = tree.into_leaves();
     for leaf in &mut leaves {
-        if leaf.path.iter().any(|band| *band == PacketBand::Detail) {
+        if leaf.path.contains(&PacketBand::Detail) {
             for coefficient in &mut leaf.coefficients {
                 *coefficient = soft_threshold(*coefficient, threshold);
             }
@@ -60,7 +60,7 @@ fn universal_threshold(tree: &WaveletPacketTree, input_len: usize) -> f32 {
     let mut detail_magnitudes = tree
         .leaves()
         .iter()
-        .filter(|leaf| leaf.path.iter().any(|band| *band == PacketBand::Detail))
+        .filter(|leaf| leaf.path.contains(&PacketBand::Detail))
         .flat_map(|leaf| leaf.coefficients.iter().map(|value| value.abs()))
         .collect::<Vec<_>>();
 

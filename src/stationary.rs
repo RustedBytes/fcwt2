@@ -137,12 +137,12 @@ fn inverse_swt_level(
 ) -> Vec<f32> {
     let len = approximation.len();
     let mut output = vec![0.0; len];
-    for i in 0..len {
+    for (i, output_sample) in output.iter_mut().enumerate().take(len) {
         for tap in 0..low.len() {
             let sample = (i + len - (tap * stride) % len) % len;
-            output[i] += low[tap] * approximation[sample] + high[tap] * detail[sample];
+            *output_sample += low[tap] * approximation[sample] + high[tap] * detail[sample];
         }
-        output[i] *= 0.5;
+        *output_sample *= 0.5;
     }
     output
 }
