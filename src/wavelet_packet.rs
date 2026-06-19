@@ -1,6 +1,7 @@
 use crate::discrete::{
-    HAAR_HI, HAAR_LO, TransformError, circular_downsample, circular_upsample, validate_power_of_two,
+    TransformError, circular_downsample, circular_upsample, validate_power_of_two,
 };
+use crate::{DiscreteWavelet, WaveletFilterBank};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum PacketBand {
@@ -17,6 +18,7 @@ pub struct WaveletPacketNode {
 #[derive(Clone, Debug, PartialEq)]
 pub struct WaveletPacketTree {
     levels: usize,
+    filter_bank: WaveletFilterBank,
     leaves: Vec<WaveletPacketNode>,
 }
 
@@ -27,6 +29,38 @@ impl WaveletPacketTree {
 
     pub fn leaves(&self) -> &[WaveletPacketNode] {
         &self.leaves
+    }
+
+    pub fn into_leaves(self) -> Vec<WaveletPacketNode> {
+        self.leaves
+    }
+
+    pub fn from_leaves(
+        levels: usize,
+        leaves: Vec<WaveletPacketNode>,
+        wavelet: DiscreteWavelet,
+    ) -> Result<Self, TransformError> {
+        Ok(Self {
+            levels,
+            filter_bank: wavelet.filter_bank()?,
+            leaves,
+        })
+    }
+
+    pub fn from_leaves_with_filter_bank(
+        levels: usize,
+        leaves: Vec<WaveletPacketNode>,
+        filter_bank: WaveletFilterBank,
+    ) -> Self {
+        Self {
+            levels,
+            filter_bank,
+            leaves,
+        }
+    }
+
+    pub fn filter_bank(&self) -> &WaveletFilterBank {
+        &self.filter_bank
     }
 
     pub fn reconstruct(&self) -> Result<Vec<f32>, TransformError> {
@@ -66,8 +100,8 @@ impl WaveletPacketTree {
                     coefficients: circular_upsample(
                         &left.coefficients,
                         &right.coefficients,
-                        &HAAR_LO,
-                        &HAAR_HI,
+                        self.filter_bank.synthesis_low(),
+                        self.filter_bank.synthesis_high(),
                     )?,
                 });
             }
@@ -85,15 +119,37 @@ impl WaveletPacketTree {
 #[derive(Clone, Debug)]
 pub struct WaveletPacketTransform {
     levels: usize,
+    filter_bank: WaveletFilterBank,
 }
 
 impl WaveletPacketTransform {
     pub fn new(levels: usize) -> Self {
-        Self { levels }
+        Self {
+            levels,
+            filter_bank: WaveletFilterBank::haar(),
+        }
+    }
+
+    pub fn with_wavelet(levels: usize, wavelet: DiscreteWavelet) -> Result<Self, TransformError> {
+        Ok(Self {
+            levels,
+            filter_bank: wavelet.filter_bank()?,
+        })
+    }
+
+    pub fn with_filter_bank(levels: usize, filter_bank: WaveletFilterBank) -> Self {
+        Self {
+            levels,
+            filter_bank,
+        }
     }
 
     pub fn levels(&self) -> usize {
         self.levels
+    }
+
+    pub fn filter_bank(&self) -> &WaveletFilterBank {
+        &self.filter_bank
     }
 
     pub fn decompose(&self, input: &[f32]) -> Result<WaveletPacketTree, TransformError> {
@@ -107,7 +163,11 @@ impl WaveletPacketTransform {
         for _ in 0..self.levels {
             let mut next = Vec::with_capacity(nodes.len() * 2);
             for node in nodes {
-                let (approx, detail) = circular_downsample(&node.coefficients, &HAAR_LO, &HAAR_HI);
+                let (approx, detail) = circular_downsample(
+                    &node.coefficients,
+                    self.filter_bank.analysis_low(),
+                    self.filter_bank.analysis_high(),
+                );
                 let mut approx_path = node.path.clone();
                 approx_path.push(PacketBand::Approximation);
                 next.push(WaveletPacketNode {
@@ -127,6 +187,7 @@ impl WaveletPacketTransform {
 
         Ok(WaveletPacketTree {
             levels: self.levels,
+            filter_bank: self.filter_bank.clone(),
             leaves: nodes,
         })
     }
@@ -137,7 +198,7 @@ mod tests {
     use approx::assert_relative_eq;
 
     use super::{PacketBand, WaveletPacketTransform};
-    use crate::TransformError;
+    use crate::{DiscreteWavelet, TransformError};
 
     #[test]
     fn rejects_invalid_inputs() {
@@ -185,6 +246,33 @@ mod tests {
 
         for (actual, expected) in reconstructed.iter().zip(input) {
             assert_relative_eq!(*actual, expected, epsilon = 1e-5);
+        }
+    }
+
+    #[test]
+    fn reconstructs_input_with_supported_wavelets() {
+        let input = [
+            1.0, -2.0, 3.5, 4.25, -5.0, 6.0, 7.0, -8.0, 0.5, 2.25, -1.75, 9.0, 3.0, -4.0, 5.5, -6.5,
+        ];
+        let wavelets = [
+            DiscreteWavelet::Daubechies(2),
+            DiscreteWavelet::Daubechies(4),
+            DiscreteWavelet::Daubechies(6),
+            DiscreteWavelet::Daubechies(8),
+            DiscreteWavelet::Symlet(2),
+            DiscreteWavelet::Symlet(4),
+            DiscreteWavelet::Symlet(6),
+            DiscreteWavelet::Symlet(8),
+        ];
+
+        for wavelet in wavelets {
+            let transform = WaveletPacketTransform::with_wavelet(2, wavelet).unwrap();
+            let tree = transform.decompose(&input).unwrap();
+            let reconstructed = tree.reconstruct().unwrap();
+
+            for (actual, expected) in reconstructed.iter().zip(input) {
+                assert_relative_eq!(*actual, expected, epsilon = 5e-5);
+            }
         }
     }
 }

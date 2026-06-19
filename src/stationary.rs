@@ -1,6 +1,5 @@
-use crate::discrete::{
-    FRAC_1_SQRT_2, HAAR_HI, HAAR_LO, TransformError, circular_convolve_same, validate_power_of_two,
-};
+use crate::discrete::{TransformError, circular_convolve_same, validate_power_of_two};
+use crate::{DiscreteWavelet, WaveletFilterBank};
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct SwtLevel {
@@ -22,20 +21,50 @@ impl SwtCoefficients {
     pub fn levels(&self) -> &[SwtLevel] {
         &self.levels
     }
+
+    pub fn into_levels(self) -> Vec<SwtLevel> {
+        self.levels
+    }
+
+    pub fn from_levels(input_len: usize, levels: Vec<SwtLevel>) -> Self {
+        Self { input_len, levels }
+    }
 }
 
 #[derive(Clone, Debug)]
 pub struct StationaryWaveletTransform {
     levels: usize,
+    filter_bank: WaveletFilterBank,
 }
 
 impl StationaryWaveletTransform {
     pub fn new(levels: usize) -> Self {
-        Self { levels }
+        Self {
+            levels,
+            filter_bank: WaveletFilterBank::haar(),
+        }
+    }
+
+    pub fn with_wavelet(levels: usize, wavelet: DiscreteWavelet) -> Result<Self, TransformError> {
+        Ok(Self {
+            levels,
+            filter_bank: wavelet.filter_bank()?,
+        })
+    }
+
+    pub fn with_filter_bank(levels: usize, filter_bank: WaveletFilterBank) -> Self {
+        Self {
+            levels,
+            filter_bank,
+        }
     }
 
     pub fn levels(&self) -> usize {
         self.levels
+    }
+
+    pub fn filter_bank(&self) -> &WaveletFilterBank {
+        &self.filter_bank
     }
 
     pub fn decompose(&self, input: &[f32]) -> Result<SwtCoefficients, TransformError> {
@@ -45,8 +74,9 @@ impl StationaryWaveletTransform {
         let mut levels = Vec::with_capacity(self.levels);
         for level in 0..self.levels {
             let stride = 1 << level;
-            let approximation = circular_convolve_same(&current, &HAAR_LO, stride);
-            let detail = circular_convolve_same(&current, &HAAR_HI, stride);
+            let approximation =
+                circular_convolve_same(&current, self.filter_bank.analysis_low(), stride);
+            let detail = circular_convolve_same(&current, self.filter_bank.analysis_high(), stride);
             current = approximation.clone();
             levels.push(SwtLevel {
                 approximation,
@@ -85,21 +115,34 @@ impl StationaryWaveletTransform {
                 return Err(TransformError::InvalidCoefficientTree);
             }
 
-            current = inverse_haar_swt_level(&current, &level.detail, 1 << level_index);
+            current = inverse_swt_level(
+                &current,
+                &level.detail,
+                self.filter_bank.synthesis_low(),
+                self.filter_bank.synthesis_high(),
+                1 << level_index,
+            );
         }
 
         Ok(current)
     }
 }
 
-fn inverse_haar_swt_level(approximation: &[f32], detail: &[f32], stride: usize) -> Vec<f32> {
+fn inverse_swt_level(
+    approximation: &[f32],
+    detail: &[f32],
+    low: &[f32],
+    high: &[f32],
+    stride: usize,
+) -> Vec<f32> {
     let len = approximation.len();
     let mut output = vec![0.0; len];
     for i in 0..len {
-        let previous = (i + len - stride % len) % len;
-        let from_current = (approximation[i] + detail[i]) * FRAC_1_SQRT_2;
-        let from_previous = (approximation[previous] - detail[previous]) * FRAC_1_SQRT_2;
-        output[i] = 0.5 * (from_current + from_previous);
+        for tap in 0..low.len() {
+            let sample = (i + len - (tap * stride) % len) % len;
+            output[i] += low[tap] * approximation[sample] + high[tap] * detail[sample];
+        }
+        output[i] *= 0.5;
     }
     output
 }
@@ -109,7 +152,7 @@ mod tests {
     use approx::assert_relative_eq;
 
     use super::StationaryWaveletTransform;
-    use crate::TransformError;
+    use crate::{DiscreteWavelet, TransformError};
 
     #[test]
     fn rejects_invalid_inputs() {
@@ -164,6 +207,33 @@ mod tests {
 
         for (actual, expected) in reconstructed.iter().zip(input) {
             assert_relative_eq!(*actual, expected, epsilon = 1e-5);
+        }
+    }
+
+    #[test]
+    fn reconstructs_input_with_supported_wavelets() {
+        let input = [
+            1.0, -2.0, 3.5, 4.25, -5.0, 6.0, 7.0, -8.0, 0.5, 2.25, -1.75, 9.0, 3.0, -4.0, 5.5, -6.5,
+        ];
+        let wavelets = [
+            DiscreteWavelet::Daubechies(2),
+            DiscreteWavelet::Daubechies(4),
+            DiscreteWavelet::Daubechies(6),
+            DiscreteWavelet::Daubechies(8),
+            DiscreteWavelet::Symlet(2),
+            DiscreteWavelet::Symlet(4),
+            DiscreteWavelet::Symlet(6),
+            DiscreteWavelet::Symlet(8),
+        ];
+
+        for wavelet in wavelets {
+            let transform = StationaryWaveletTransform::with_wavelet(2, wavelet).unwrap();
+            let coeffs = transform.decompose(&input).unwrap();
+            let reconstructed = transform.reconstruct(&coeffs).unwrap();
+
+            for (actual, expected) in reconstructed.iter().zip(input) {
+                assert_relative_eq!(*actual, expected, epsilon = 5e-5);
+            }
         }
     }
 

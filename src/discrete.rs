@@ -3,12 +3,9 @@ pub enum TransformError {
     EmptyInput,
     NonPowerOfTwo { len: usize },
     LevelTooDeep { levels: usize, max_levels: usize },
+    InvalidWaveletFilterBank,
     InvalidCoefficientTree,
 }
-
-pub(crate) const FRAC_1_SQRT_2: f32 = std::f32::consts::FRAC_1_SQRT_2;
-pub(crate) const HAAR_LO: [f32; 2] = [FRAC_1_SQRT_2, FRAC_1_SQRT_2];
-pub(crate) const HAAR_HI: [f32; 2] = [FRAC_1_SQRT_2, -FRAC_1_SQRT_2];
 
 pub(crate) fn validate_power_of_two(
     input_len: usize,
@@ -104,10 +101,8 @@ pub(crate) fn reflect_index(index: isize, low: f32, high: f32) -> usize {
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        HAAR_HI, HAAR_LO, TransformError, circular_downsample, circular_upsample,
-        validate_power_of_two,
-    };
+    use super::{TransformError, circular_downsample, circular_upsample, validate_power_of_two};
+    use crate::WaveletFilterBank;
     use approx::assert_relative_eq;
 
     #[test]
@@ -130,8 +125,16 @@ mod tests {
     #[test]
     fn haar_downsample_upsample_reconstructs() {
         let input = [1.0, 2.0, -3.0, 4.0, 5.0, -6.0, 7.0, 8.0];
-        let (approx, detail) = circular_downsample(&input, &HAAR_LO, &HAAR_HI);
-        let reconstructed = circular_upsample(&approx, &detail, &HAAR_LO, &HAAR_HI).unwrap();
+        let haar = WaveletFilterBank::haar();
+        let (approx, detail) =
+            circular_downsample(&input, haar.analysis_low(), haar.analysis_high());
+        let reconstructed = circular_upsample(
+            &approx,
+            &detail,
+            haar.synthesis_low(),
+            haar.synthesis_high(),
+        )
+        .unwrap();
 
         for (actual, expected) in reconstructed.iter().zip(input) {
             assert_relative_eq!(*actual, expected, epsilon = 1e-6);

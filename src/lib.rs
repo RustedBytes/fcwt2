@@ -1,8 +1,10 @@
 #![feature(portable_simd)]
 
+pub mod basis_selection;
 mod discrete;
 pub mod dual_tree_complex;
 mod fcwt;
+mod filter_bank;
 mod morlet;
 #[cfg(feature = "python")]
 mod python;
@@ -11,9 +13,13 @@ pub mod stationary;
 mod wavelet;
 pub mod wavelet_packet;
 
+pub use basis_selection::{
+    BasisScore, BasisSelectionCriterion, SelectedBasis, TransformKind, score_basis, select_basis,
+};
 pub use discrete::TransformError;
 pub use dual_tree_complex::{DtcwtLevel, DtcwtTree, DualTreeComplexWaveletTransform};
 pub use fcwt::Fcwt;
+pub use filter_bank::{DiscreteWavelet, WaveletFilterBank};
 pub use morlet::Morlet;
 pub use rustfft::num_complex::Complex32;
 pub use scales::{ScaleError, ScaleType, Scales};

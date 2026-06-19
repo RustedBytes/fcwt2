@@ -6,9 +6,11 @@ use pyo3::{
 use rustfft::num_complex::Complex32;
 
 use crate::{
-    DtcwtLevel, DtcwtTree, DualTreeComplexWaveletTransform, Fcwt, Morlet, PacketBand, ScaleError,
-    ScaleType, Scales, StationaryWaveletTransform, SwtCoefficients, SwtLevel, TransformError,
-    WaveletPacketNode, WaveletPacketTransform, WaveletPacketTree,
+    BasisScore, BasisSelectionCriterion, DiscreteWavelet, DtcwtLevel, DtcwtTree,
+    DualTreeComplexWaveletTransform, Fcwt, Morlet, PacketBand, ScaleError, ScaleType, Scales,
+    SelectedBasis, StationaryWaveletTransform, SwtCoefficients, SwtLevel, TransformError,
+    TransformKind, WaveletPacketNode, WaveletPacketTransform, WaveletPacketTree, score_basis,
+    select_basis,
 };
 
 #[pyclass(name = "Morlet", skip_from_py_object)]
@@ -240,9 +242,21 @@ impl PyWaveletPacketTransform {
         }
     }
 
+    #[staticmethod]
+    fn with_wavelet(levels: usize, wavelet: &str) -> PyResult<Self> {
+        WaveletPacketTransform::with_wavelet(levels, parse_discrete_wavelet(wavelet)?)
+            .map(|inner| Self { inner })
+            .map_err(transform_error)
+    }
+
     #[getter]
     fn levels(&self) -> usize {
         self.inner.levels()
+    }
+
+    #[getter]
+    fn wavelet(&self) -> String {
+        self.inner.filter_bank().name().to_string()
     }
 
     fn decompose(&self, input: Vec<f32>) -> PyResult<PyWaveletPacketTree> {
@@ -253,7 +267,11 @@ impl PyWaveletPacketTransform {
     }
 
     fn __repr__(&self) -> String {
-        format!("WaveletPacketTransform(levels={})", self.inner.levels())
+        format!(
+            "WaveletPacketTransform(levels={}, wavelet='{}')",
+            self.inner.levels(),
+            self.inner.filter_bank().name()
+        )
     }
 }
 
@@ -341,9 +359,21 @@ impl PyStationaryWaveletTransform {
         }
     }
 
+    #[staticmethod]
+    fn with_wavelet(levels: usize, wavelet: &str) -> PyResult<Self> {
+        StationaryWaveletTransform::with_wavelet(levels, parse_discrete_wavelet(wavelet)?)
+            .map(|inner| Self { inner })
+            .map_err(transform_error)
+    }
+
     #[getter]
     fn levels(&self) -> usize {
         self.inner.levels()
+    }
+
+    #[getter]
+    fn wavelet(&self) -> String {
+        self.inner.filter_bank().name().to_string()
     }
 
     fn decompose(&self, input: Vec<f32>) -> PyResult<PySwtCoefficients> {
@@ -360,7 +390,11 @@ impl PyStationaryWaveletTransform {
     }
 
     fn __repr__(&self) -> String {
-        format!("StationaryWaveletTransform(levels={})", self.inner.levels())
+        format!(
+            "StationaryWaveletTransform(levels={}, wavelet='{}')",
+            self.inner.levels(),
+            self.inner.filter_bank().name()
+        )
     }
 }
 
@@ -418,6 +452,104 @@ impl PySwtLevel {
             "SwtLevel(approximation={}, detail={})",
             self.inner.approximation.len(),
             self.inner.detail.len()
+        )
+    }
+}
+
+#[pyclass(name = "BasisScore", skip_from_py_object)]
+#[derive(Clone)]
+struct PyBasisScore {
+    inner: BasisScore,
+}
+
+#[pymethods]
+impl PyBasisScore {
+    #[getter]
+    fn wavelet(&self) -> String {
+        self.inner.wavelet_name.clone()
+    }
+
+    #[getter]
+    fn transform_kind(&self) -> &'static str {
+        transform_kind_name(self.inner.transform_kind)
+    }
+
+    #[getter]
+    fn score(&self) -> f32 {
+        self.inner.score
+    }
+
+    #[getter]
+    fn subband_level(&self) -> usize {
+        self.inner.subband_level
+    }
+
+    #[getter]
+    fn coefficient_count(&self) -> usize {
+        self.inner.coefficient_count
+    }
+
+    #[getter]
+    fn median_abs_deviation(&self) -> f32 {
+        self.inner.median_abs_deviation
+    }
+
+    #[getter]
+    fn interquartile_range(&self) -> f32 {
+        self.inner.interquartile_range
+    }
+
+    #[getter]
+    fn central_concentration(&self) -> f32 {
+        self.inner.central_concentration
+    }
+
+    #[getter]
+    fn sharpness(&self) -> f32 {
+        self.inner.sharpness
+    }
+
+    fn __repr__(&self) -> String {
+        format!(
+            "BasisScore(wavelet='{}', score={})",
+            self.inner.wavelet_name, self.inner.score
+        )
+    }
+}
+
+#[pyclass(name = "SelectedBasis", skip_from_py_object)]
+#[derive(Clone)]
+struct PySelectedBasis {
+    inner: SelectedBasis,
+}
+
+#[pymethods]
+impl PySelectedBasis {
+    #[getter]
+    fn selected(&self) -> String {
+        self.inner.selected_name.clone()
+    }
+
+    #[getter]
+    fn score(&self) -> PyBasisScore {
+        PyBasisScore {
+            inner: self.inner.score.clone(),
+        }
+    }
+
+    fn candidate_scores(&self) -> Vec<PyBasisScore> {
+        self.inner
+            .candidate_scores
+            .iter()
+            .cloned()
+            .map(|inner| PyBasisScore { inner })
+            .collect()
+    }
+
+    fn __repr__(&self) -> String {
+        format!(
+            "SelectedBasis(selected='{}', score={})",
+            self.inner.selected_name, self.inner.score.score
         )
     }
 }
@@ -563,6 +695,9 @@ fn transform_error(error: TransformError) -> PyErr {
         TransformError::LevelTooDeep { levels, max_levels } => PyValueError::new_err(format!(
             "levels {levels} exceeds maximum decomposition level {max_levels}"
         )),
+        TransformError::InvalidWaveletFilterBank => {
+            PyValueError::new_err("invalid or unsupported wavelet filter bank")
+        }
         TransformError::InvalidCoefficientTree => PyValueError::new_err("invalid coefficient tree"),
     }
 }
@@ -592,6 +727,95 @@ fn parse_wavelet(value: &Bound<'_, PyAny>) -> PyResult<Morlet> {
     ))
 }
 
+fn parse_discrete_wavelet(value: &str) -> PyResult<DiscreteWavelet> {
+    let normalized = value.to_ascii_lowercase();
+    if normalized == "haar" || normalized == "db1" {
+        return Ok(DiscreteWavelet::Haar);
+    }
+
+    if let Some(rest) = normalized.strip_prefix("db") {
+        return rest
+            .parse::<usize>()
+            .map(DiscreteWavelet::Daubechies)
+            .map_err(|_| PyValueError::new_err(format!("unsupported wavelet '{value}'")));
+    }
+
+    if let Some(rest) = normalized.strip_prefix("sym") {
+        return rest
+            .parse::<usize>()
+            .map(DiscreteWavelet::Symlet)
+            .map_err(|_| PyValueError::new_err(format!("unsupported wavelet '{value}'")));
+    }
+
+    Err(PyValueError::new_err(format!(
+        "unsupported wavelet '{value}'"
+    )))
+}
+
+fn parse_transform_kind(value: &str) -> PyResult<TransformKind> {
+    match value.to_ascii_lowercase().as_str() {
+        "packet" | "wavelet_packet" | "wpt" => Ok(TransformKind::WaveletPacket),
+        "stationary" | "swt" => Ok(TransformKind::Stationary),
+        _ => Err(PyValueError::new_err(format!(
+            "unsupported transform kind '{value}'"
+        ))),
+    }
+}
+
+fn transform_kind_name(value: TransformKind) -> &'static str {
+    match value {
+        TransformKind::WaveletPacket => "wavelet_packet",
+        TransformKind::Stationary => "stationary",
+    }
+}
+
+#[pyfunction(name = "score_basis")]
+fn score_discrete_basis(
+    input: Vec<f32>,
+    levels: usize,
+    wavelet: &str,
+    transform_kind: &str,
+) -> PyResult<PyBasisScore> {
+    score_basis(
+        &input,
+        levels,
+        parse_discrete_wavelet(wavelet)?,
+        parse_transform_kind(transform_kind)?,
+    )
+    .map(|inner| PyBasisScore { inner })
+    .map_err(transform_error)
+}
+
+#[pyfunction(name = "select_basis")]
+#[pyo3(signature = (input, levels, candidates, transform_kind, criterion = "coarsest_detail_pdf_shape"))]
+fn select_discrete_basis(
+    input: Vec<f32>,
+    levels: usize,
+    candidates: Vec<String>,
+    transform_kind: &str,
+    criterion: &str,
+) -> PyResult<PySelectedBasis> {
+    if criterion != "coarsest_detail_pdf_shape" {
+        return Err(PyValueError::new_err(format!(
+            "unsupported basis selection criterion '{criterion}'"
+        )));
+    }
+    let candidates = candidates
+        .iter()
+        .map(|candidate| parse_discrete_wavelet(candidate))
+        .collect::<PyResult<Vec<_>>>()?;
+
+    select_basis(
+        &input,
+        levels,
+        &candidates,
+        parse_transform_kind(transform_kind)?,
+        BasisSelectionCriterion::CoarsestDetailPdfShape,
+    )
+    .map(|inner| PySelectedBasis { inner })
+    .map_err(transform_error)
+}
+
 fn py_bool(value: bool) -> &'static str {
     if value { "True" } else { "False" }
 }
@@ -607,9 +831,13 @@ fn fcwt2(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyStationaryWaveletTransform>()?;
     m.add_class::<PySwtCoefficients>()?;
     m.add_class::<PySwtLevel>()?;
+    m.add_class::<PyBasisScore>()?;
+    m.add_class::<PySelectedBasis>()?;
     m.add_class::<PyDualTreeComplexWaveletTransform>()?;
     m.add_class::<PyDtcwtTree>()?;
     m.add_class::<PyDtcwtLevel>()?;
+    m.add_function(wrap_pyfunction!(score_discrete_basis, m)?)?;
+    m.add_function(wrap_pyfunction!(select_discrete_basis, m)?)?;
     m.add("FCWT", m.getattr("Fcwt")?)?;
     Ok(())
 }
