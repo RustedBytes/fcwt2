@@ -44,6 +44,13 @@ assert_eq!(coefficients.len(), signal.len() * scales.len());
 
 Output is scale-major: `coefficients[scale_index * signal.len() + sample_index]`.
 
+Interactive notebooks live in `notebooks`:
+
+```bash
+python -m pip install notebook matplotlib numpy
+jupyter notebook notebooks
+```
+
 ## Benchmarks
 
 Criterion benchmarks cover real and complex CWT transforms at 1024 and 4096
